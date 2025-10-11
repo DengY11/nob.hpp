@@ -1,0 +1,8 @@
+/how_to/build/
+/how_to/nob
+/my_build
+
+*.o
+*.a
+
+.DS_Store
