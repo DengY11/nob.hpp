@@ -62,7 +62,7 @@ inline bool is_src_file(const std::string& file) {
         return false;
     }
     std::string ext = file.substr(dot_pos);
-    return ext == ".c" || ext == ".cpp" || ext == ".cxx";
+    return ext == ".c" || ext == ".cpp" || ext == ".cxx" || ext == ".cc";
 }
 
 inline bool exists(const std::string& path) {
