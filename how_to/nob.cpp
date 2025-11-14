@@ -41,8 +41,13 @@ void clean_build(const std::string& build_dir) {
 }
 
 void find_src_files_recursively(const std::string& base_dir, const std::string& current_dir, std::vector<std::string>& src_files) {
-    std::vector<std::string> entries = NOB::read_entire_dir(current_dir);
-    for (const auto& entry : entries) {
+    auto result = NOB::read_entire_dir_result(current_dir);
+    if (!result.success) {
+        NOB::ERROR("Failed to read directory " + current_dir + ": " + result.error_message);
+        return;
+    }
+    
+    for (const auto& entry : result.files) {
         std::string path = current_dir + "/" + entry;
         if (NOB::is_dir(path)) {
             find_src_files_recursively(base_dir, path, src_files);
@@ -68,13 +73,15 @@ void build_main(const std::string& build_dir, const std::string& src_dir) {
         return;
     }
 
-    std::vector<NOB::Cmds> compile_cmds;
+    std::vector<NOB::Command> compile_cmds;
     std::vector<std::string> lib_obj_paths;
     std::string main_obj_path;
 
     for(const auto& src_path: src_files){
-        std::string rel_path = src_path.substr(src_dir.length() + 1);
+        // Use cross-platform path handling
+        std::string rel_path = NOB::get_relative_path(src_path, src_dir);
         std::replace(rel_path.begin(), rel_path.end(), '/', '_');
+        std::replace(rel_path.begin(), rel_path.end(), '\\', '_');
         size_t dot_pos = rel_path.rfind('.');
         std::string obj_name = rel_path.substr(0, dot_pos) + ".o";
         std::string obj_path = build_dir + "/obj/" + obj_name;
@@ -86,7 +93,7 @@ void build_main(const std::string& build_dir, const std::string& src_dir) {
         }
 
         if (NOB::is_updated(src_path, obj_path)) {
-            NOB::Cmds cmd;
+            NOB::Command cmd;
             cmd.emplace_back("g++");
             cmd.emplace_back("-c");
             cmd.emplace_back("-I" + src_dir);
@@ -99,7 +106,7 @@ void build_main(const std::string& build_dir, const std::string& src_dir) {
 
     if (!compile_cmds.empty()) {
         NOB::INFO("Compiling...");
-        if (!NOB::run_cmds_parallel(compile_cmds)) {
+        if (!NOB::run_commands_parallel(compile_cmds)) {
             NOB::ERROR("Compilation failed.");
             return;
         }
@@ -109,21 +116,21 @@ void build_main(const std::string& build_dir, const std::string& src_dir) {
 
     const std::string lib_path = build_dir + "/libnob_example.a";
     NOB::INFO("Archiving static library...");
-    NOB::Cmds archive_cmd;
+    NOB::Command archive_cmd;
     archive_cmd.emplace_back("ar");
     archive_cmd.emplace_back("rcs");
     archive_cmd.emplace_back(lib_path);
     for (const auto& path : lib_obj_paths) {
         archive_cmd.emplace_back(path);
     }
-     if (!NOB::run_cmds(archive_cmd)) {
+     if (!NOB::run_command(archive_cmd)) {
         NOB::ERROR("Archiving failed.");
         return;
     }
 
 
     NOB::INFO("Linking...");
-    NOB::Cmds link_cmd;
+    NOB::Command link_cmd;
     link_cmd.emplace_back("g++");
     link_cmd.emplace_back("-o");
     link_cmd.emplace_back(build_dir + "/main");
@@ -131,7 +138,7 @@ void build_main(const std::string& build_dir, const std::string& src_dir) {
     link_cmd.emplace_back(lib_path);
 
 
-    if (!NOB::run_cmds(link_cmd)) {
+    if (!NOB::run_command(link_cmd)) {
         NOB::ERROR("Linking failed.");
         return;
     }
